@@ -8,6 +8,7 @@ import java.net.http.HttpResponse;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -142,5 +143,94 @@ public class FlipkartApiService {
     public List<Product> getProductsByInitialAndColor(String initial, String color) {
         return productRepository.findByInitialAndColor(initial, color);
     }
+
+    public String getAllProductsByBrand(String brandId) {
+        try {
+            // Create HttpClient instance
+            HttpClient client = HttpClient.newHttpClient();
+
+            int currentPage = 1;
+            int totalPages = 1; // Initial placeholder value, will be updated after first request
+
+            // Loop through all pages
+            while (currentPage <= totalPages) {
+                // Build the HTTP request to get products by brand and page
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create("https://real-time-flipkart-api.p.rapidapi.com/products-by-brand?brand_id=" + brandId + "&page=" + currentPage + "&sort_by=popularity"))
+                        .header("x-rapidapi-key", apiKey)
+                        .header("x-rapidapi-host", "real-time-flipkart-api.p.rapidapi.com")
+                        .method("GET", HttpRequest.BodyPublishers.noBody())
+                        .build();
+
+                // Send the request and get the response
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+                // Log the full response for inspection
+                System.out.println("API Response (Page " + currentPage + "): " + response.body());
+
+                // Parse the JSON response
+                JSONObject jsonResponse = new JSONObject(response.body());
+
+                // Get total number of pages from the first request
+                if (currentPage == 1) {
+                    totalPages = jsonResponse.getInt("totalPages");
+                    System.out.println("Total Pages: " + totalPages);
+                }
+
+                // Get the array of products
+                JSONArray productsArray = jsonResponse.getJSONArray("products");
+
+                // Iterate through the products and extract details
+                for (int i = 0; i < productsArray.length(); i++) {
+                    JSONObject productObject = productsArray.getJSONObject(i);
+
+                    // Extract the product ID
+                    String pid = productObject.getString("pid");
+
+                    // Extract the product title and price
+                    String productTitle = productObject.optString("title", "N/A");
+                    int productPrice = productObject.optInt("price", -1);
+
+                    // Check if productTitle and productPrice are valid
+                    if (productTitle.equals("N/A") || productPrice == -1) {
+                        System.out.println("Skipping product with missing data. Product ID: " + pid);
+                        continue;  // Skip this product if title or price is missing
+                    }
+
+                    // Log the product details
+                    System.out.println("Product ID: " + pid);
+                    System.out.println("Product Name: " + productTitle);
+                    System.out.println("Product Price: " + productPrice);
+
+                    // Convert price to BigDecimal
+                    BigDecimal productPriceBD = BigDecimal.valueOf(productPrice);
+
+                    // Save the product to the database
+                    Product product = new Product();
+                    product.setProductId(pid);
+                    product.setName(productTitle);
+                    product.setPrice(productPriceBD);
+                    product.setCreatedAt(LocalDateTime.now()); // Set current date and time
+                    product.setSource("Flipkart"); // Set source
+
+                    productRepository.save(product);
+                }
+
+                // Move to the next page
+                currentPage++;
+            }
+
+            return "All products saved successfully";
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error fetching all products by brand";
+        }
+    }
+
+
+
+
+
 
 }

@@ -68,4 +68,9 @@ public class FlipkartApiController {
         return flipkartApiService.getProductsByInitialAndColor(initial, color);
     }
 
+    @GetMapping("/api/flipkart/products-by-brand")
+    public String getProductsByBrand(@RequestParam String brandId) {
+        return flipkartApiService.getAllProductsByBrand(brandId);
+    }
+
 }
